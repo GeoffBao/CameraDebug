@@ -2,6 +2,8 @@ import numpy as np
 import argparse
 import os
 import matplotlib.pyplot as plt
+import cv2
+from PIL import Image
 
 def read_raw12_plain(raw_data, width, height):
     """读取Plain RAW12格式"""
@@ -357,179 +359,231 @@ def read_raw10_mipi(raw_data, width, height):
         print(f"Error reading MIPI RAW10: {str(e)}")
         raise
 
+def raw10_to_rgb(raw_data, width, height, bayer_pattern='RGGB'):
+    """Convert RAW10 bayer data to RGB image
+    Args:
+        raw_data: numpy array of raw10 data
+        width: image width
+        height: image height
+        bayer_pattern: bayer pattern ('RGGB', 'BGGR', 'GRBG', 'GBRG')
+    Returns:
+        rgb_image: RGB image array (height, width, 3)
+    """
+    try:
+        # Normalize RAW10 data to 8-bit
+        raw_norm = (raw_data.astype(np.float32) / 1023.0 * 255.0).astype(np.uint8)
+        
+        # Reshape to 2D array
+        bayer = raw_norm.reshape((height, width))
+        
+        # Convert bayer to RGB using OpenCV
+        if bayer_pattern == 'RGGB':
+            cv_bayer_pattern = cv2.COLOR_BAYER_RG2RGB
+        elif bayer_pattern == 'BGGR':
+            cv_bayer_pattern = cv2.COLOR_BAYER_BG2RGB
+        elif bayer_pattern == 'GRBG':
+            cv_bayer_pattern = cv2.COLOR_BAYER_GR2RGB
+        elif bayer_pattern == 'GBRG':
+            cv_bayer_pattern = cv2.COLOR_BAYER_GB2RGB
+        else:
+            raise ValueError(f"Unsupported bayer pattern: {bayer_pattern}")
+            
+        rgb = cv2.cvtColor(bayer, cv_bayer_pattern)
+        return rgb
+        
+    except Exception as e:
+        print(f"Error converting RAW10 to RGB: {str(e)}")
+        raise
+
+def rgb_to_yuv420(rgb_image):
+    """Convert RGB image to YUV420 format
+    Args:
+        rgb_image: RGB image array (height, width, 3)
+    Returns:
+        yuv420_data: YUV420 data as bytes
+    """
+    try:
+        # Convert RGB to YUV using OpenCV
+        yuv = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2YUV_I420)
+        return yuv.tobytes()
+        
+    except Exception as e:
+        print(f"Error converting RGB to YUV420: {str(e)}")
+        raise
+
+def yuv420_to_bmp(yuv_data, width, height, output_path):
+    """Convert YUV420 data to BMP format and save it."""
+    try:
+        # YUV420格式的Y通道
+        y_channel = yuv_data[:width * height].reshape((height, width))
+        
+        # 创建RGB图像
+        rgb_image = Image.new("RGB", (width, height))
+        
+        # 将YUV转换为RGB
+        for y in range(height):
+            for x in range(width):
+                Y = y_channel[y, x]
+                U = yuv_data[width * height + (y // 2) * (width // 2) + (x // 2)] - 128
+                V = yuv_data[width * height + (width * height // 4) + (y // 2) * (width // 2) + (x // 2)] - 128
+                
+                R = Y + 1.402 * V
+                G = Y - 0.344136 * U - 0.714136 * V
+                B = Y + 1.772 * U
+                
+                # Clip values to [0, 255]
+                R = max(0, min(255, int(R)))
+                G = max(0, min(255, int(G)))
+                B = max(0, min(255, int(B)))
+                
+                rgb_image.putpixel((x, y), (R, G, B))
+        
+        # 保存为BMP格式
+        rgb_image.save(output_path, "BMP")
+        print(f"BMP output saved as: {output_path}")
+        
+    except Exception as e:
+        print(f"Error converting YUV to BMP: {str(e)}")
+        raise
+
 def main():
-    parser = argparse.ArgumentParser(
-        description='''
-RAW Image Format Conversion Tool
--------------------------------
-This tool converts various RAW image formats to Plain RAW10.
-
-Currently Supported Input Formats:
---------------------------------
-1. RAW8 (raw8)
-   - 8 bits per pixel
-   - 1 byte per pixel
-   - File size = width * height bytes
-   
-2. Plain RAW10 (raw10_plain)
-   - 10 bits per pixel
-   - 2 bytes per pixel
-   - File size = width * height * 2 bytes
-   
-3. MIPI RAW10 (raw10_mipi)
-   - 10 bits per pixel
-   - 5 bytes per 4 pixels (packed)
-   - File size = (width * height * 10 + 7) // 8 bytes
-   
-4. Plain RAW12 (raw12_plain)
-   - 12 bits per pixel
-   - 2 bytes per pixel
-   - File size = width * height * 2 bytes
-   
-5. MIPI RAW12 (raw12_mipi)
-   - 12 bits per pixel
-   - 3 bytes per 2 pixels (packed)
-   - File size = (width * height * 12 + 7) // 8 bytes
-
-Output Format:
--------------
-Plain RAW10 (2 bytes per pixel)
-- 10 bits effective data
-- LSB aligned in 16-bit words
-- File size = width * height * 2 bytes
-        ''',
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    
-    parser.add_argument('input', help='Input RAW file path')
-    parser.add_argument('output', help='Output Plain RAW10 file path')
+    parser = argparse.ArgumentParser(description='Convert between RAW and YUV formats')
+    parser.add_argument('input', help='Input file path')
+    parser.add_argument('output', help='Output file path')
     parser.add_argument('width', type=int, help='Image width')
     parser.add_argument('height', type=int, help='Image height')
     parser.add_argument('--input-format', 
-                        choices=['raw8', 'raw10_plain', 'raw10_mipi', 'raw12_plain', 'raw12_mipi'], 
+                        choices=['raw8', 'raw10_plain', 'raw10_mipi', 'raw12_plain', 'raw12_mipi'],
                         required=True,
                         help='Input format')
+    parser.add_argument('--output-format',
+                        choices=['raw10_plain', 'yuv420', 'bmp'],
+                        required=True,
+                        help='Output format (raw10_plain, yuv420, bmp)')
+    parser.add_argument('--bayer-pattern',
+                        choices=['RGGB', 'BGGR', 'GRBG', 'GBRG'],
+                        default='RGGB',
+                        help='Bayer pattern for RAW conversion (default: RGGB)')
     parser.add_argument('--save-preview', action='store_true',
                         help='Save preview image as PNG')
     
-    parser.epilog = '''
-Usage Examples:
---------------
-1. Convert RAW8 sensor output (2048x1528):
-   python imagingtools.py input.raw output.raw10 2048 1528 --input-format raw8
-
-2. Convert MIPI packed RAW10 (3840x2160) and save comparison preview:
-   python imagingtools.py input.raw output.raw10 3840 2160 --input-format raw10_mipi --save-preview
-
-3. Convert Plain RAW12 (4096x3072):
-   python imagingtools.py input.raw output.raw10 4096 3072 --input-format raw12_plain
-
-4. Convert PDAF RAW8 image (2048x1528) and save preview:
-   python imagingtools.py pdaf.raw pdaf_out.raw10 2048 1528 --input-format raw8 --save-preview
-
-5. Convert high resolution MIPI RAW12 (8192x6144):
-   python imagingtools.py sensor.raw output.raw10 8192 6144 --input-format raw12_mipi
-
-6. Convert mobile camera RAW10 (4624x3472):
-   python imagingtools.py camera.raw output.raw10 4624 3472 --input-format raw10_mipi
-
-Common Image Resolutions:
-------------------------
-- 8MP (3840x2160): 4K UHD
-- 12MP (4096x3072): Standard 4:3
-- 16MP (4624x3472): Mobile Sensor
-- 20MP (5184x3888): DSLR
-- 32MP (6528x4896): High-res Mobile
-- 48MP (8000x6000): High-end Mobile
-- 50MP (8192x6144): Professional
-
-File Size Examples:
-------------------
-For 4K UHD (3840x2160):
-- RAW8: 8.3 MB
-- RAW10 (Plain): 16.6 MB
-- RAW10 (MIPI): 10.4 MB
-- RAW12 (Plain): 16.6 MB
-- RAW12 (MIPI): 12.4 MB
-
-Note:
------
-Use --save-preview to generate a PNG file showing the input and output image comparison.
-The preview helps verify correct format selection and conversion quality.
-'''
-    
     args = parser.parse_args()
-    
+
     try:
-        print(f"\nProcessing image:")
-        print(f"Input file: {args.input}")
-        print(f"Input format: {args.input_format}")
-        print(f"Image size: {args.width}x{args.height}")
-        
-        # 读取输入文件
+        # Read input file
         with open(args.input, 'rb') as f:
             raw_data = np.fromfile(f, dtype=np.uint8)
-            
-        # 根据输入格式选择正确的读取函数
-        if args.input_format == 'raw10_mipi':
-            input_image = read_raw10_mipi(raw_data, args.width, args.height)
-            output_image = input_image  # MIPI RAW10已经是10位数据，直接使用
-            print("Reading as MIPI RAW10 format")
-            
-        elif args.input_format == 'raw10_plain':
-            input_image = read_raw10_plain(raw_data, args.width, args.height)
-            output_image = input_image  # Plain RAW10已经是10位数据，直接使用
-            print("Reading as Plain RAW10 format")
-            
-        elif args.input_format == 'raw8':
-            input_image = read_raw8(raw_data, args.width, args.height)
-            output_image = (input_image.astype(np.uint16) << 2)  # 左移2位转换为10位
-            print("Converting RAW8 to RAW10 (left shift 2 bits)")
-            
+        
+        # Initialize input_data
+        input_data = None
+        
+        # Process input based on format
+        if args.input_format == 'raw10_plain':
+            input_data = np.frombuffer(raw_data, dtype=np.uint16)
+            input_data = input_data.reshape((args.height, args.width)) & 0x03FF
         elif args.input_format == 'raw12_plain':
-            input_image = read_raw12_plain(raw_data, args.width, args.height)
-            output_image = (input_image >> 2)  # 右移2位转换为10位
-            print("Converting Plain RAW12 to RAW10 (right shift 2 bits)")
+            input_data = np.frombuffer(raw_data, dtype=np.uint16)
+            input_data = input_data.reshape((args.height, args.width)) >> 2  # Convert to 10 bits
+        elif args.input_format == 'raw10_mipi':
+            input_data = read_raw10_mipi(raw_data, args.width, args.height)
+        elif args.input_format == 'raw12_mipi':
+            input_data = read_raw12_mipi(raw_data, args.width, args.height)
+        elif args.input_format == 'raw8':
+            input_data = read_raw8(raw_data, args.width, args.height)
+            input_data = (input_data.astype(np.uint16) << 2)  # Convert to 10 bits
+
+        # Check if input_data was set
+        if input_data is None:
+            raise ValueError("Input data could not be processed. Please check the input format.")
+
+        # Convert to output format
+        if args.output_format == 'yuv420':
+            # Convert RAW10 to RGB
+            rgb_image = raw10_to_rgb(input_data, args.width, args.height, args.bayer_pattern)
             
-        else:  # raw12_mipi
-            input_image = read_raw12_mipi(raw_data, args.width, args.height)
-            output_image = (input_image >> 2)  # 右移2位转换为10位
-            print("Converting MIPI RAW12 to RAW10 (right shift 2 bits)")
-        
-        # 显示输入和输出图像
-        fig = plt.figure(figsize=(12, 5))
-        fig.canvas.manager.set_window_title('RAW Format Conversion Preview')
-        
-        plt.subplot(121)
-        plt.imshow(input_image, cmap='gray')
-        plt.title(f"Input Image ({args.input_format})")
-        plt.colorbar(label='Input Pixel Value')
-        plt.xlabel('Width (pixels)')
-        plt.ylabel('Height (pixels)')
-        
-        plt.subplot(122)
-        plt.imshow(output_image, cmap='gray')
-        plt.title("Output Image (Plain RAW10)")
-        plt.colorbar(label='Output Pixel Value (10-bit: 0-1023)')
-        plt.xlabel('Width (pixels)')
-        plt.ylabel('Height (pixels)')
-        
-        plt.tight_layout()
-        
-        # 保存预览图
-        if args.save_preview:
-            preview_path = os.path.splitext(args.output)[0] + '_preview.png'
-            plt.savefig(preview_path, dpi=300, bbox_inches='tight')
-            print(f"\nPreview image saved as: {preview_path}")
-        
-        plt.show()
-        
-        # 保存为Plain RAW10格式
-        output_image = output_image.astype(np.uint16)
-        with open(args.output, 'wb') as f:
-            output_image.tofile(f)
+            # Convert RGB to YUV420
+            output_data = rgb_to_yuv420(rgb_image)
             
-        print(f"\nSuccessfully converted to Plain RAW10: {args.output}")
-        print(f"Output range: {output_image.min()} - {output_image.max()}")
+            # Save YUV file
+            if not args.output:
+                args.output = 'yuv420.yuv'
+            with open(args.output, 'wb') as f:
+                f.write(output_data)
+            print(f"YUV output saved as: {args.output}")
+
+            # Save RAW output (as 10-bit)
+            raw_output_path = os.path.splitext(args.output)[0] + '_output.raw10'
+            input_data.tofile(raw_output_path)
+            print(f"RAW output saved as: {raw_output_path}")
+
+            # Show input and YUV preview
+            plt.figure(figsize=(15, 5))
+            plt.subplot(1, 2, 1)
+            plt.imshow(input_data, cmap='gray')
+            plt.title(f"Input ({args.input_format})")
+            plt.colorbar(label='Pixel Value')
+
+            yuv_preview = np.frombuffer(output_data, dtype=np.uint8)
+            y_channel = yuv_preview[:args.width * args.height].reshape((args.height, args.width))
+            plt.subplot(1, 2, 2)
+            plt.imshow(y_channel, cmap='gray')
+            plt.title("YUV (Y-channel)")
+            plt.colorbar(label='Pixel Value')
+
+            plt.tight_layout()
+            plt.show()
+                
+        elif args.output_format == 'raw10_plain':
+            # Save RAW output (as 10-bit)
+            raw_output_path = os.path.splitext(args.output)[0] + '_output.raw10'
+            input_data.tofile(raw_output_path)
+            print(f"RAW output saved as: {raw_output_path}")
+
+            # Show input and RAW preview
+            plt.figure(figsize=(15, 5))
+            plt.subplot(1, 2, 1)
+            plt.imshow(input_data, cmap='gray')
+            plt.title(f"Input ({args.input_format})")
+            plt.colorbar(label='Pixel Value')
+
+            plt.subplot(1, 2, 2)
+            plt.imshow(input_data, cmap='gray')
+            plt.title("RAW Output")
+            plt.colorbar(label='Pixel Value')
+
+            plt.tight_layout()
+            plt.show()
+
+        elif args.output_format == 'bmp':
+            # Convert RAW to RGB and save as BMP
+            rgb_image = raw10_to_rgb(input_data, args.width, args.height, args.bayer_pattern)
+            bmp_output_path = os.path.splitext(args.output)[0] + '.bmp'
+            Image.fromarray(rgb_image).save(bmp_output_path)
+            print(f"BMP output saved as: {bmp_output_path}")
+
+            # Save YUV output if needed
+            yuv_output_path = os.path.splitext(args.output)[0] + '.yuv'
+            yuv_data = rgb_to_yuv420(rgb_image)
+            with open(yuv_output_path, 'wb') as f:
+                f.write(yuv_data)
+            print(f"YUV output saved as: {yuv_output_path}")
+
+            # Show input and BMP preview
+            plt.figure(figsize=(15, 5))
+            plt.subplot(1, 2, 1)
+            plt.imshow(input_data, cmap='gray')
+            plt.title(f"Input ({args.input_format})")
+            plt.colorbar(label='Pixel Value')
+
+            plt.subplot(1, 2, 2)
+            plt.imshow(rgb_image)
+            plt.title("BMP Output")
+            plt.colorbar(label='Pixel Value')
+
+            plt.tight_layout()
+            plt.show()
+            
+        print(f"\nConversion completed: {args.output}")
         
     except Exception as e:
         print(f"Conversion failed: {str(e)}")
