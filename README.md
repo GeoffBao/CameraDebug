@@ -1,133 +1,60 @@
-# RAW Image Format Conversion Tool
+# RAW to YUV and BMP Converter
 
-A Python tool for converting between different RAW image formats with preview support.
+## 简介
+该工具用于将 RAW 图像文件转换为 YUV 和 BMP 格式。支持多种输入格式，包括 RAW10 和 RAW12，并且可以将 RAW 格式直接转换为 RAW 格式。
 
-## Features
+## 安装依赖
+确保安装以下 Python 库：
 
-- Supports multiple RAW formats conversion to Plain RAW10
-- Real-time preview of input and output images
-- Optional comparison preview saving as PNG
-- Detailed format verification and error checking
-- Command-line interface with comprehensive help
+pip install numpy opencv-python Pillow matplotlib
 
-## Supported Formats
+## 使用方法
 
-### Input Formats
-1. **RAW8** (raw8)
-   - 8 bits per pixel
-   - 1 byte per pixel
-   - File size = width * height bytes
+python imagingtools.py <input_file> <output_file> <width> <height> --input-format <input_format> --output-format <output_format> [--bayer-pattern <bayer_pattern>] [--save-preview]
 
-2. **Plain RAW10** (raw10_plain)
-   - 10 bits per pixel
-   - 2 bytes per pixel
-   - File size = width * height * 2 bytes
+### 参数说明
+- `<input_file>`: 输入的 RAW 文件路径。
+- `<output_file>`: 输出的 YUV、BMP 或 RAW 文件路径。
+- `<width>`: 图像宽度。
+- `<height>`: 图像高度。
+- `--input-format`: 输入格式，支持以下选项：
+  - `raw8`
+  - `raw10_plain`
+  - `raw10_mipi`
+  - `raw12_plain`
+  - `raw12_mipi`
+- `--output-format`: 输出格式，支持以下选项：
+  - `raw10_plain`（直接输出 RAW 格式）
+  - `yuv420`（输出 YUV 格式）
+  - `bmp`（输出 BMP 格式）
+- `--bayer-pattern`: 拜耳模式，支持以下选项（默认值为 RGGB）：
+  - `RGGB`
+  - `BGGR`
+  - `GRBG`
+  - `GBRG`
+- `--save-preview`: 可选参数，保存预览图像为 PNG 格式。
 
-3. **MIPI RAW10** (raw10_mipi)
-   - 10 bits per pixel
-   - 5 bytes per 4 pixels (packed)
-   - File size = (width * height * 10 + 7) // 8 bytes
-
-4. **Plain RAW12** (raw12_plain)
-   - 12 bits per pixel
-   - 2 bytes per pixel
-   - File size = width * height * 2 bytes
-
-5. **MIPI RAW12** (raw12_mipi)
-   - 12 bits per pixel
-   - 3 bytes per 2 pixels (packed)
-   - File size = (width * height * 12 + 7) // 8 bytes
-
-### Output Format
-- **Plain RAW10**
-  - 10 bits effective data
-  - LSB aligned in 16-bit words
-  - File size = width * height * 2 bytes
-
-## Installation
-
-### Prerequisites
-- Python 3.6 or higher
-- NumPy
-- Matplotlib
-pip install numpy matplotlib
-
-## Usage
-
-### Basic Command Format
-python imagingtools.py <input_file> <output_file> <width> <height> --input-format <format> [--save-preview]
-
-### Examples
-
-1. Convert RAW8 sensor output:
-python imagingtools.py input.raw output.raw10 2048 1528 --input-format raw8
-
-2. Convert MIPI RAW10 with preview:
-python imagingtools.py input.raw output.raw10 3840 2160 --input-format raw10_mipi --save-preview
-
-3. Convert Plain RAW12:
-python imagingtools.py input.raw output.raw10 4096 3072 --input-format raw12_plain
-
-### Common Image Resolutions
-
-| Resolution | Dimensions | Description |
-|------------|------------|-------------|
-| 8MP | 3840x2160 | 4K UHD |
-| 12MP | 4096x3072 | Standard 4:3 |
-| 16MP | 4624x3472 | Mobile Sensor |
-| 20MP | 5184x3888 | DSLR |
-| 32MP | 6528x4896 | High-res Mobile |
-| 48MP | 8000x6000 | High-end Mobile |
-| 50MP | 8192x6144 | Professional |
-
-### File Size Reference
-
-Example for 4K UHD (3840x2160):
-- RAW8: 8.3 MB
-- RAW10 (Plain): 16.6 MB
-- RAW10 (MIPI): 10.4 MB
-- RAW12 (Plain): 16.6 MB
-- RAW12 (MIPI): 12.4 MB
-
-## Preview Feature
-
-The `--save-preview` option generates a PNG file showing:
-- Input image with format and pixel value range
-- Output image (Plain RAW10) with pixel value range
-- Side-by-side comparison for quality verification
-
-## Error Handling
-
-The tool includes various error checks:
-- File size verification
-- Format compatibility
-- Resolution validation
-- Data range checking
-
-## Tips
-
-1. Always verify input format with file size:
+## 示例
+1. 转换为 YUV 格式：
    ```bash
-   ls -l input.raw  # Check file size
-   python imagingtools.py --help  # Check format sizes
+   python imagingtools.py input.raw output.yuv 800 448 --input-format raw12_plain --output-format yuv420 --bayer-pattern RGGB --save-preview
    ```
 
-2. Use preview for format verification:
+2. 转换为 RAW 格式：
    ```bash
-   python imagingtools.py input.raw output.raw10 width height --input-format format --save-preview
+   python imagingtools.py input.raw output.raw10 800 448 --input-format raw10_plain --output-format raw10_plain --save-preview
    ```
 
-3. Common issues:
-   - File size mismatch: Check resolution and format
-   - Corrupted image: Verify input format
-   - Black/white image: Check bit depth conversion
+3. 转换为 BMP 格式：
+   ```bash
+   python imagingtools.py input.raw output.bmp 800 448 --input-format raw10_plain --output-format bmp --bayer-pattern RGGB --save-preview
+   ```
 
-## Contributing
+## 注意事项
+- 确保输入文件的格式与指定的输入格式匹配。
+- 输出文件的格式应与指定的输出格式一致。
 
-Feel free to submit issues and enhancement requests!
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+## 许可证
+MIT License
 
 

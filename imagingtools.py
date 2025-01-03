@@ -447,15 +447,15 @@ def yuv420_to_bmp(yuv_data, width, height, output_path):
         raise
 
 def main():
-    parser = argparse.ArgumentParser(description='Convert between RAW and YUV formats')
-    parser.add_argument('input', help='Input file path')
-    parser.add_argument('output', help='Output file path')
+    parser = argparse.ArgumentParser(description='Convert between RAW, YUV, and BMP formats.')
+    parser.add_argument('input', help='Input file path (RAW format)')
+    parser.add_argument('output', help='Output file path (YUV or BMP format)')
     parser.add_argument('width', type=int, help='Image width')
     parser.add_argument('height', type=int, help='Image height')
     parser.add_argument('--input-format', 
                         choices=['raw8', 'raw10_plain', 'raw10_mipi', 'raw12_plain', 'raw12_mipi'],
                         required=True,
-                        help='Input format')
+                        help='Input format (raw8, raw10_plain, raw10_mipi, raw12_plain, raw12_mipi)')
     parser.add_argument('--output-format',
                         choices=['raw10_plain', 'yuv420', 'bmp'],
                         required=True,
