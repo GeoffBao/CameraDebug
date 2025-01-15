@@ -1,0 +1,10 @@
+Image Analysis Report
+==================================================
+
+shape: (448, 800)
+channels: 1
+
+This is a grayscale image. Possible reasons:
+1. A monochrome sensor was used.
+2. The image was converted to grayscale during processing.
+3. BMP was saved in 8-bit grayscale format.
