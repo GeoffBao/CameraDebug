@@ -262,7 +262,7 @@ def display_raw_images(input_image, output_image, input_format, output_format):
     plt.imshow(input_image, cmap='gray')
     plt.title(f"Input RAW ({input_format})")
     plt.colorbar()
-    
+
     # 显示输出图像
     plt.subplot(122)
     plt.imshow(output_image, cmap='gray')

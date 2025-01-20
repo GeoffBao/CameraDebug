@@ -1,7 +1,7 @@
 Image Analysis Report
 ==================================================
 
-shape: (448, 800)
+shape: (1528, 2048)
 channels: 1
 
 This is a grayscale image. Possible reasons:
