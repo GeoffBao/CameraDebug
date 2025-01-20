@@ -541,23 +541,34 @@ def yuv420_to_bmp(yuv_data, width, height, output_path):
         print(f"Error converting YUV to BMP: {str(e)}")
         raise
 
-def select_input_file():
+# 全局变量来存储完整路径
+input_files_full_path = []
+output_file_full_path = ""
+
+def select_input_files():
     """选择输入文件"""
-    file_path = filedialog.askopenfilename(title="选择输入文件", filetypes=[("RAW Files", "*.raw"), ("All Files", "*.*")])
-    if file_path:  # 确保用户选择了文件
+    global input_files_full_path
+    file_paths = filedialog.askopenfilenames(title="选择输入文件", filetypes=[("RAW Files", "*.raw"), ("All Files", "*.*")])
+    if file_paths:  # 确保用户选择了文件
+        input_files_full_path = list(file_paths)  # 存储完整路径
         input_file_entry.delete(0, tk.END)
-        input_file_entry.insert(0, file_path)  # 使用完整路径而不是仅文件名
+        
+        # 显示选择的文件名
+        display_files = ', '.join([os.path.basename(path) for path in input_files_full_path])
+        input_file_entry.insert(0, display_files)
 
 def select_output_file():
     """选择输出文件"""
+    global output_file_full_path
     file_path = filedialog.asksaveasfilename(title="选择输出文件", defaultextension=".yuv", 
                                                filetypes=[("YUV Files", "*.yuv"), 
                                                           ("BMP Files", "*.bmp"), 
                                                           ("RAW10 Plain Files", "*.raw10"),
                                                           ("All Files", "*.*")])
     if file_path:  # 确保用户选择了文件
+        output_file_full_path = file_path  # 存储完整路径
         output_file_entry.delete(0, tk.END)
-        output_file_entry.insert(0, file_path)  # 使用完整路径而不是仅文件名
+        output_file_entry.insert(0, os.path.basename(output_file_full_path))  # 显示文件名
 
 def show_progress_dialog(message):
     """显示进度对话框"""
@@ -655,82 +666,90 @@ def bayer_to_rgb(bayer_image, width, height, bayer_pattern):
 def run_conversion():
     """直接在主线程中运行转换操作"""
     try:
-        # 获取输入和输出文件路径
-        input_file = input_file_entry.get()
-        output_file = output_file_entry.get()
+        # 使用全局变量中的完整路径
+        input_files = input_files_full_path
+        output_file = output_file_full_path
 
-        # 路径验证
-        if not os.path.exists(input_file):
-            messagebox.showerror("错误", f"输入文件不存在：{input_file}")
-            return
+        # 打印实际路径以进行调试
+        print(f"输入文件路径: {input_files}")
+        print(f"输出文件路径: {output_file}")
 
-        # 获取输入和输出格式
-        input_format = input_format_var.get()
-        output_format = output_format_var.get()
-        bayer_pattern = bayer_pattern_var.get()
+        for input_file in input_files:
+            # 路径验证
+            if not os.path.exists(input_file):
+                messagebox.showerror("错误", f"输入文件不存在：{input_file}")
+                return
 
-        # 读取输入文件
-        with open(input_file, 'rb') as f:
-            raw_data = np.fromfile(f, dtype=np.uint8)
+            # 继续进行转换操作...
+            print(f"开始转换：输入文件 {input_file}，输出文件 {output_file}")
 
-        # 获取图像尺寸
-        try:
-            width = int(width_entry.get())
-            height = int(height_entry.get())
-        except ValueError:
-            messagebox.showerror("错误", "宽度和高度必须是有效的数字")
-            return
+            # 获取输入和输出格式
+            input_format = input_format_var.get()
+            output_format = output_format_var.get()
+            bayer_pattern = bayer_pattern_var.get()
 
-        # 根据输入格式处理数据
-        if input_format == 'bayer':
-            bayer_image = raw_data.reshape((height, width))
-            rgb_image = bayer_to_rgb(bayer_image, width, height, bayer_pattern)
-        elif input_format == 'raw8':
-            input_data = read_raw8(raw_data, width, height)
-            rgb_image = input_data
-        elif input_format == 'raw10_plain':
-            input_data = read_raw10_plain(raw_data, width, height)
-            rgb_image = input_data
-        elif input_format == 'raw10_mipi':
-            input_data = read_raw10_mipi(raw_data, width, height)
-            rgb_image = input_data
-        elif input_format == 'raw12_plain':
-            input_data = read_raw12_plain(raw_data, width, height)
-            rgb_image = input_data
-        elif input_format == 'raw12_mipi':
-            input_data = read_raw12_mipi(raw_data, width, height)
-            rgb_image = input_data
-        else:
-            raise ValueError("不支持的输入格式")
+            # 读取输入文件
+            with open(input_file, 'rb') as f:
+                raw_data = np.fromfile(f, dtype=np.uint8)
 
-        # 转换为10位
-        output_image = (input_data >> 2).astype(np.uint16)
+            # 获取图像尺寸
+            try:
+                width = int(width_entry.get())
+                height = int(height_entry.get())
+            except ValueError:
+                messagebox.showerror("错误", "宽度和高度必须是有效的数字")
+                return
 
-        # 生成带有后缀信息的输出文件名
-        output_file_with_suffix = generate_output_filename(output_file, output_format, width, height)
+            # 根据输入格式处理数据
+            if input_format == 'bayer':
+                bayer_image = raw_data.reshape((height, width))
+                rgb_image = bayer_to_rgb(bayer_image, width, height, bayer_pattern)
+            elif input_format == 'raw8':
+                input_data = read_raw8(raw_data, width, height)
+                rgb_image = input_data
+            elif input_format == 'raw10_plain':
+                input_data = read_raw10_plain(raw_data, width, height)
+                rgb_image = input_data
+            elif input_format == 'raw10_mipi':
+                input_data = read_raw10_mipi(raw_data, width, height)
+                rgb_image = input_data
+            elif input_format == 'raw12_plain':
+                input_data = read_raw12_plain(raw_data, width, height)
+                rgb_image = input_data
+            elif input_format == 'raw12_mipi':
+                input_data = read_raw12_mipi(raw_data, width, height)
+                rgb_image = input_data
+            else:
+                raise ValueError("不支持的输入格式")
 
-        # 根据输出格式保存数据
-        if output_format == 'raw10_plain':
-            output_image.tofile(output_file_with_suffix)  # 保存为 RAW10 格式
-        elif output_format == 'bmp':
-            save_as_bmp(rgb_image, output_file_with_suffix)  # 保存为 BMP 格式
-        elif output_format == 'yuv420':
-            yuv_data = rgb_to_yuv420(output_image)  # 转换为 YUV420 格式
-            save_yuv420(yuv_data, output_file_with_suffix)  # 保存为 YUV 文件
+            # 转换为10位
+            output_image = (input_data >> 2).astype(np.uint16)
 
-        # BayerImageAnalyzer if output format is BMP
-        if output_format == 'bmp':
-            analyzer = BayerImageAnalyzer(rgb_image)  # 传递 rgb_image
-            print("图像基本信息：")
-            for key, value in analyzer.info.items():
-                print(f"{key}: {value}")
-            
-            analyzer.check_bayer_pattern()
-            analyzer.save_analysis_report()
-            analyzer.show_histogram()
+            # 生成带有后缀信息的输出文件名
+            output_file_with_suffix = generate_output_filename(output_file, output_format, width, height)
 
-        # 调用 display_raw_images 显示输入和输出图像的对比
-        display_raw_images(input_data, rgb_image, input_format, output_format)
+            # 根据输出格式保存数据
+            if output_format == 'raw10_plain':
+                output_image.tofile(output_file_with_suffix)  # 保存为 RAW10 格式
+            elif output_format == 'bmp':
+                save_as_bmp(rgb_image, output_file_with_suffix)  # 保存为 BMP 格式
+            elif output_format == 'yuv420':
+                yuv_data = rgb_to_yuv420(output_image)  # 转换为 YUV420 格式
+                save_yuv420(yuv_data, output_file_with_suffix)  # 保存为 YUV 文件
+
+            # BayerImageAnalyzer if output format is BMP
+            if output_format == 'bmp':
+                analyzer = BayerImageAnalyzer(rgb_image)  # 传递 rgb_image
+                print("图像基本信息：")
+                for key, value in analyzer.info.items():
+                    print(f"{key}: {value}")
+                
+                analyzer.check_bayer_pattern()
+                analyzer.save_analysis_report()
+                analyzer.show_histogram()
+
+            # 调用 display_raw_images 显示输入和输出图像的对比
+            display_raw_images(input_data, rgb_image, input_format, output_format)
 
     except Exception as e:
         messagebox.showerror("错误", str(e))
@@ -767,7 +786,7 @@ root.title("RAW格式转换器")
 tk.Label(root, text="输入文件:").grid(row=0, column=0)
 input_file_entry = tk.Entry(root, width=50)
 input_file_entry.grid(row=0, column=1)
-tk.Button(root, text="浏览", command=select_input_file).grid(row=0, column=2)
+tk.Button(root, text="浏览", command=select_input_files).grid(row=0, column=2)
 
 # 输出文件选择
 tk.Label(root, text="输出文件:").grid(row=1, column=0)
