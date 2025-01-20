@@ -576,20 +576,54 @@ def get_format_from_filename(filename):
 def select_output_file():
     """选择输出文件"""
     global output_file_full_path
-    file_path = filedialog.asksaveasfilename(
-        defaultextension=".bmp",
-        filetypes=[("BMP Files", "*.bmp"), 
-                  ("YUV Files", "*.yuv"), 
-                  ("RAW10 Plain Files", "*.raw10")]
+    
+    # 获取当前输入文件名（如果有的话）
+    input_file = input_file_entry.get()
+    if input_file:
+        # 从输入文件名构造默认的输出文件名
+        base_name = os.path.splitext(os.path.basename(input_file))[0]
+        initialfile = base_name + ".bmp"  # 默认使用.bmp扩展名
+    else:
+        initialfile = "output.bmp"  # 如果没有输入文件，使用默认名称
+    
+    # 创建带有明确提示的文件类型列表
+    file_types = [
+        ("BMP 图像 (*.bmp)", "*.bmp"),
+        ("YUV420 格式 (*.yuv)", "*.yuv"),
+        ("RAW10 Plain 格式 (*.raw10)", "*.raw10")
+    ]
+    
+    # 显示提示消息
+    messagebox.showinfo(
+        "选择输出格式",
+        "请选择输出文件格式：\n\n"
+        "- BMP: 标准图像格式\n"
+        "- YUV420: YUV色彩空间格式\n"
+        "- RAW10 Plain: 10位原始数据格式"
     )
+    
+    file_path = filedialog.asksaveasfilename(
+        initialfile=initialfile,
+        defaultextension=".bmp",
+        filetypes=file_types,
+        title="选择输出格式和文件名"  # 更明确的对话框标题
+    )
+    
     if file_path:  # 确保用户选择了文件
         output_file_full_path = file_path
         output_file_entry.delete(0, tk.END)
-        output_file_entry.insert(0, os.path.basename(output_file_full_path))
+        output_file_entry.insert(0, file_path)  # 显示完整路径
         
         # 根据选择的文件扩展名自动设置输出格式
         output_format = get_format_from_filename(file_path)
         output_format_var.set(output_format)
+        
+        # 显示选择的格式确认
+        messagebox.showinfo(
+            "格式确认",
+            f"已选择输出格式：{output_format}\n"
+            f"文件将保存为：{os.path.basename(file_path)}"
+        )
 
 def show_progress_dialog(message):
     """显示进度对话框"""
