@@ -546,7 +546,7 @@ def select_input_file():
     file_path = filedialog.askopenfilename(title="选择输入文件", filetypes=[("RAW Files", "*.raw"), ("All Files", "*.*")])
     if file_path:  # 确保用户选择了文件
         input_file_entry.delete(0, tk.END)
-        input_file_entry.insert(0, os.path.basename(file_path))  # 只显示文件名
+        input_file_entry.insert(0, file_path)  # 使用完整路径而不是仅文件名
 
 def select_output_file():
     """选择输出文件"""
@@ -557,7 +557,7 @@ def select_output_file():
                                                           ("All Files", "*.*")])
     if file_path:  # 确保用户选择了文件
         output_file_entry.delete(0, tk.END)
-        output_file_entry.insert(0, os.path.basename(file_path))  # 只显示文件名
+        output_file_entry.insert(0, file_path)  # 使用完整路径而不是仅文件名
 
 def show_progress_dialog(message):
     """显示进度对话框"""
@@ -654,45 +654,52 @@ def bayer_to_rgb(bayer_image, width, height, bayer_pattern):
 
 def run_conversion():
     """直接在主线程中运行转换操作"""
-    input_file = input_file_entry.get()
-    output_file = output_file_entry.get()
-
-    # 输入验证
     try:
-        width = int(width_entry.get())
-        height = int(height_entry.get())
-    except ValueError:
-        messagebox.showerror("输入错误", "宽度和高度必须是有效的数字。")
-        return
+        # 获取输入和输出文件路径
+        input_file = input_file_entry.get()
+        output_file = output_file_entry.get()
 
-    input_format = input_format_var.get()
-    output_format = output_format_var.get()
-    bayer_pattern = bayer_pattern_var.get()  # 获取用户选择的 Bayer 模式
+        # 路径验证
+        if not os.path.exists(input_file):
+            messagebox.showerror("错误", f"输入文件不存在：{input_file}")
+            return
 
-    try:
-        # 读取输入文件并根据格式处理
+        # 获取输入和输出格式
+        input_format = input_format_var.get()
+        output_format = output_format_var.get()
+        bayer_pattern = bayer_pattern_var.get()
+
+        # 读取输入文件
         with open(input_file, 'rb') as f:
             raw_data = np.fromfile(f, dtype=np.uint8)
 
+        # 获取图像尺寸
+        try:
+            width = int(width_entry.get())
+            height = int(height_entry.get())
+        except ValueError:
+            messagebox.showerror("错误", "宽度和高度必须是有效的数字")
+            return
+
         # 根据输入格式处理数据
         if input_format == 'bayer':
-            bayer_image = raw_data.reshape((height, width))  # 假设输入为 Bayer 格式
-            rgb_image = bayer_to_rgb(bayer_image, width, height, bayer_pattern)  # 转换为 RGB
+            bayer_image = raw_data.reshape((height, width))
+            rgb_image = bayer_to_rgb(bayer_image, width, height, bayer_pattern)
         elif input_format == 'raw8':
             input_data = read_raw8(raw_data, width, height)
-            rgb_image = input_data  # 假设已经是 RGB 格式
+            rgb_image = input_data
         elif input_format == 'raw10_plain':
             input_data = read_raw10_plain(raw_data, width, height)
-            rgb_image = input_data  # 假设已经是 RGB 格式
+            rgb_image = input_data
         elif input_format == 'raw10_mipi':
             input_data = read_raw10_mipi(raw_data, width, height)
-            rgb_image = input_data  # 假设已经是 RGB 格式
+            rgb_image = input_data
         elif input_format == 'raw12_plain':
             input_data = read_raw12_plain(raw_data, width, height)
-            rgb_image = input_data  # 假设已经是 RGB 格式
+            rgb_image = input_data
         elif input_format == 'raw12_mipi':
             input_data = read_raw12_mipi(raw_data, width, height)
-            rgb_image = input_data  # 假设已经是 RGB 格式
+            rgb_image = input_data
         else:
             raise ValueError("不支持的输入格式")
 
